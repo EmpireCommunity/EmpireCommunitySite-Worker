@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import worker, { handleRequest, runScheduled, PUBLIC_URL, KV_KEY, type Env, type IO } from '../src/index.ts';
+import * as entrypoint from '../src/index.ts';
+import worker from '../src/index.ts';
+import { handleRequest, runScheduled, PUBLIC_URL, KV_KEY, type Env, type IO } from '../src/handlers.ts';
+
+it('exports only the default Worker handler from the entrypoint', () => {
+  expect(Object.keys(entrypoint)).toEqual(['default']);
+  expect(entrypoint.default.fetch).toBeTypeOf('function');
+  expect(entrypoint.default.scheduled).toBeTypeOf('function');
+});
 
 const now = '2026-11-10T12:00:00.000Z';
 const record = { members: 888, updatedAt: now, source: 'discord-invite', consecutiveFailures: 0, outOfBandStreak: 0, lastError: null };

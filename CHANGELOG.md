@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Isolate the Worker entrypoint from internal handler exports and harden the configuration check.
+
 - Harden the configuration check, use manual upstream redirect handling and preserve HTTP outcomes on cleanup failure.
 - Add the npm Dependabot cooldown and clarify the procedural owner-review gate (D-57).
 

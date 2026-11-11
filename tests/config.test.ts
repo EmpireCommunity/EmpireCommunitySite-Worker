@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { parse } from 'jsonc-parser';
 import { expect, it } from 'vitest';
 
@@ -29,6 +29,7 @@ it.each([
 });
 
 it.each([
+  ['.wrangler/deploy/config.json', '{}', 'Generated configuration forbidden', undefined],
   ['wrangler.toml', 'name = "other"', 'Unexpected Wrangler configuration file', undefined],
   ['wrangler.json', '{}', 'Unexpected Wrangler configuration file', undefined],
   ['wrangler.other.jsonc', '{}', 'Unexpected Wrangler configuration file', undefined],
@@ -47,7 +48,10 @@ it.each([
     writeFileSync(join(directory, 'wrangler.jsonc'), JSON.stringify(config));
     cpSync(resolve('src'), join(directory, 'src'), { recursive: true });
     mkdirSync(join(directory, 'src/nested'));
-    if (file && source) writeFileSync(join(directory, file), source);
+    if (file && source) {
+      mkdirSync(dirname(join(directory, file)), { recursive: true });
+      writeFileSync(join(directory, file), source);
+    }
     else if (file) symlinkSync(join(directory, 'outside.ts'), join(directory, file));
     const result = spawnSync(process.execPath, [resolve('scripts/check-config.ts')], {
       cwd: directory, encoding: 'utf8',

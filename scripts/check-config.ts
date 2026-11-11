@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { parse, type ParseError } from 'jsonc-parser';
 import ts from 'typescript';
@@ -8,6 +8,7 @@ const config = parse(readFileSync('wrangler.jsonc', 'utf8'), errors) as Record<s
 function requireRule(ok: boolean, message: string): void {
   if (!ok) throw new Error(message);
 }
+requireRule(!existsSync('.wrangler/deploy/config.json'), 'Generated configuration forbidden');
 for (const file of readdirSync('.')) {
   requireRule(file === 'wrangler.jsonc' || !/^wrangler(?:\..+)?\.(?:jsonc?|toml)$/i.test(file),
     `Unexpected Wrangler configuration file: ${file}`);
