@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { parse, type ParseError } from 'jsonc-parser';
 import ts from 'typescript';
 
@@ -7,15 +8,16 @@ const config = parse(readFileSync('wrangler.jsonc', 'utf8'), errors) as Record<s
 function requireRule(ok: boolean, message: string): void {
   if (!ok) throw new Error(message);
 }
-function scanKeys(value: unknown): void {
-  if (value === null || typeof value !== 'object') return;
-  for (const [key, child] of Object.entries(value)) {
-    requireRule(!['route', 'routes', 'env', 'keep_vars'].includes(key), `Forbidden configuration key: ${key}`);
-    scanKeys(child);
-  }
+for (const file of readdirSync('.')) {
+  requireRule(file === 'wrangler.jsonc' || !/^wrangler(?:\..+)?\.(?:jsonc?|toml)$/i.test(file),
+    `Unexpected Wrangler configuration file: ${file}`);
 }
 requireRule(errors.length === 0 && config !== null && typeof config === 'object' && !Array.isArray(config), 'Invalid wrangler JSONC');
-scanKeys(config);
+const allowedKeys = new Set([
+  '$schema', 'name', 'main', 'compatibility_date', 'workers_dev', 'preview_urls',
+  'triggers', 'kv_namespaces', 'vars', 'observability',
+]);
+for (const key of Object.keys(config)) requireRule(allowedKeys.has(key), `Unexpected configuration key: ${key}`);
 requireRule(config.name === 'empirecommunitysite-worker' && config.main === 'src/index.ts', 'Unexpected Worker identity/entrypoint');
 requireRule(typeof config.compatibility_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(config.compatibility_date), 'Pin compatibility_date');
 requireRule(config.workers_dev === false && config.preview_urls === false, 'Public alternate URLs must be disabled');
@@ -30,14 +32,21 @@ requireRule(vars !== undefined && Object.keys(vars).sort().join(',') === 'DISCOR
 requireRule(vars?.MEMBERS_SOURCE === 'discord-invite', 'Only discord-invite is implemented');
 requireRule(typeof vars?.DISCORD_INVITE_CODE === 'string' && /^[A-Za-z0-9-]{2,32}$/.test(vars.DISCORD_INVITE_CODE), 'Invalid invite code');
 requireRule(typeof vars?.DISCORD_GUILD_ID === 'string' && /^[0-9]{17,20}$/.test(vars.DISCORD_GUILD_ID), 'Guild ID must be a snowflake string');
-for (const file of readdirSync('src', { recursive: true })) {
-  if (typeof file === 'string' && file.endsWith('.ts')) {
-    const source = readFileSync(`src/${file}`, 'utf8');
+const sourceRoot = resolve('src');
+for (const entry of readdirSync('src', { recursive: true, withFileTypes: true })) {
+  requireRule(!entry.isSymbolicLink(), 'Source symlinks forbidden');
+  if (entry.isFile()) {
+    const file = relative(sourceRoot, resolve(entry.parentPath, entry.name));
+    const source = readFileSync(resolve(sourceRoot, file), 'utf8');
     requireRule(!/\bconsole\s*(?:\.|\[)/.test(source), `Logging forbidden: src/${file}`);
     const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
     function visit(node: ts.Node): void {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
         requireRule(ts.isStringLiteral(node.moduleSpecifier) && /^\.{1,2}\//.test(node.moduleSpecifier.text), `Runtime npm import forbidden: src/${file}`);
+        if (ts.isStringLiteral(node.moduleSpecifier)) {
+          const target = relative(sourceRoot, resolve(dirname(resolve(sourceRoot, file)), node.moduleSpecifier.text));
+          requireRule(target !== '..' && !target.startsWith('../') && !isAbsolute(target), `Import outside src forbidden: src/${file}`);
+        }
       }
       requireRule(!ts.isImportEqualsDeclaration(node), `Import assignment forbidden: src/${file}`);
       if (ts.isCallExpression(node)) {

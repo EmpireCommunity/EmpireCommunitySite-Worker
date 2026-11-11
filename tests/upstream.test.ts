@@ -19,7 +19,7 @@ describe('Discord external contract and retry rules', () => {
     expect(await fetchMembers(config, io)).toEqual({ ok: true, members: 888 });
     const [url, init] = fetcher.mock.calls[0]!;
     expect(url).toBe('https://discord.com/api/v10/invites/approved-invite?with_counts=true');
-    expect(init).toEqual({ method: 'GET', redirect: 'error', signal: expect.any(AbortSignal),
+    expect(init).toEqual({ method: 'GET', redirect: 'manual', signal: expect.any(AbortSignal),
       headers: { 'User-Agent': 'EmpireCommunitySite-members/1 (+https://empirecommunity.org)' } });
   });
   it.each([new Error('network'), new Response(null, { status: 503 })])('retries network/5xx at 2s and 6s, then succeeds', async (failure) => {
@@ -58,12 +58,29 @@ describe('Discord external contract and retry rules', () => {
   it.each([
     [new Response(null, { status: 404 }), 'invite_not_found'],
     [new Response(null, { status: 403 }), 'invalid_response'],
+    [new Response(null, { status: 302, headers: { Location: 'https://example.com/' } }), 'invalid_response'],
     [new Response('not JSON'), 'invalid_response'],
     [Response.json({ ...valid, guild: { id: 1010657521775681556 } }), 'invalid_response'],
   ])('does not retry invalid responses or deleted invites', async (response, code) => {
     const { io, fetcher } = setup(response);
     expect(await fetchMembers(config, io)).toEqual({ ok: false, code });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    [404, undefined, 'invite_not_found', false],
+    [429, undefined, 'rate_limited', false],
+    [429, '1', 'rate_limited', true],
+    [302, undefined, 'invalid_response', false],
+  ] as const)('preserves status %s when body cancellation rejects', async (status, retryAfter, code, retries) => {
+    const cancel = vi.fn(async () => { throw new Error('cancel failed'); });
+    const response = new Response(new ReadableStream<Uint8Array>({ cancel }), {
+      status, headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter },
+    });
+    const { io, fetcher } = setup(response, Response.json(valid));
+    expect(await fetchMembers(config, io)).toEqual(retries ? { ok: true, members: 888 } : { ok: false, code });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(retries ? 2 : 1);
+    expect(vi.mocked(io.sleep).mock.calls).toEqual(retries ? [[1000]] : []);
   });
   it.each([
     { ...config, inviteCode: '../bad' }, { ...config, inviteCode: 'x'.repeat(33) },

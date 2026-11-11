@@ -41,8 +41,9 @@ The exact fail-open route and edge protections are configured
 manually; Wrangler never manages routes. Workers.dev and preview URLs remain off, with observability disabled.
 
 Cloudflare Workers Builds deploys merges to main; GitHub Actions only verifies changes. Before connecting Builds,
-require owner review and the four checks: `Quality (lint, typecheck, tests)`, `Config check`, `Workflow lint`,
-`Secret scan`. Keep non-production branch builds disabled. In Workers Builds, the build command is install-only: `pnpm install --frozen-lockfile`.
+require the four checks: `Quality (lint, typecheck, tests)`, `Config check`, `Workflow lint`,
+`Secret scan`. Owner review is a procedural gate (D-57): GitHub requires zero approvals and code-owner review is off
+for the single-account setup. Keep non-production branch builds disabled. In Workers Builds, the build command is install-only: `pnpm install --frozen-lockfile`.
 The deploy command is `pnpm exec wrangler deploy` (the locked version). GitHub Actions runs tests, lint and typechecking
 outside the build credential environment. These checks and coverage (`pnpm test:coverage`) can run locally; CI does not run coverage. Confirm on the first build that Cloudflare uses the
 pinned pnpm and honours the esbuild/workerd lifecycle allowlist; report a mismatch before proceeding. Every merge requires the owner's explicit OK. Nobody should merge or deploy

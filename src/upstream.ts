@@ -40,11 +40,11 @@ async function attempt(config: InviteConfig, io: UpstreamIO): Promise<{ candidat
   try {
     const response = await io.fetch(
       `https://discord.com/api/v10/invites/${encodeURIComponent(config.inviteCode)}?with_counts=true`,
-      { method: 'GET', redirect: 'error', signal: controller.signal,
+      { method: 'GET', redirect: 'manual', signal: controller.signal,
         headers: { 'User-Agent': 'EmpireCommunitySite-members/1 (+https://empirecommunity.org)' } },
     );
     if (response.status === 200) return { candidate: parseInvite(await readBody(response, controller), config) };
-    await response.body?.cancel();
+    await response.body?.cancel().catch(() => { /* Preserve the HTTP status if cleanup fails. */ });
     if (response.status === 429) {
       const header = response.headers.get('Retry-After');
       const retryAfter = header !== null && /^(?:[0-9]|10)$/.test(header) ? Number(header) * 1000 : undefined;

@@ -1,7 +1,7 @@
 # T-14b: contract and threat model
 
 Risk: High (external data published to visitors and deployment supply chain).
-Architecture owner: Alicerce. Security model: Sentinela T-14c, controls A1–A9 and B1–B6.
+Architecture owner: Alicerce. Security model: Sentinela T-14c, all controls.
 Normative behavior: [members-json v1](https://github.com/EmpireCommunity/EmpireCommunitySite/blob/main/docs/contracts/members-json.md),
 sections 1, 2.2–2.5, 2.7–2.10, 7 and 8; configuration updated by D-55/T-14a.
 
@@ -35,7 +35,8 @@ three consecutive jumps accept the new count. Failures preserve the count and ti
 
 ## Operator controls and accepted limits
 
-Before connecting Workers Builds, the owner must require all four CI checks on main and enforce owner review.
+Before connecting Workers Builds, the owner must require all four CI checks on main. Owner review is a procedural
+gate (D-57): GitHub requires zero approvals and code-owner review is off for the single-account setup.
 Every merge is a production deployment and requires the owner's explicit OK. Non-production branch builds stay off.
 The build token must have the narrowest available permissions; install scripts execute in that build environment.
 The only route is created manually, exact path and fail open; it is absent from Wrangler. Workers.dev, preview URLs
