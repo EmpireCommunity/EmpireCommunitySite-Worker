@@ -6,4 +6,7 @@
   retry and band rules, and twice-daily Cron persistence without logs.
 - Add contract/pure-rule tests, strict TypeScript, lint, configuration/workflow checks and read-only CI.
 - Add D-55 Workers Builds configuration, CODEOWNERS, grouped Dependabot updates and the operator/security documentation.
-- Leave the KV namespace ID as an explicit all-zero deployment blocker pending owner setup.
+- Address PR #1 review: clarify cache-error origin fallback and local-only coverage; preserve invalid-response classification
+  when oversized-body cancellation rejects, with regression coverage.
+- Rename the Worker/package to empirecommunitysite-worker (D-61), configure the owner-provided public KV namespace ID,
+  and permanently reject all-zero IDs in the config check with tests.

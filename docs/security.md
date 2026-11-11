@@ -41,7 +41,7 @@ The build token must have the narrowest available permissions; install scripts e
 The only route is created manually, exact path and fail open; it is absent from Wrangler. Workers.dev, preview URLs
 and observability are disabled. The operator must apply the mandatory `/data/` rate limit and query refusal at the
 edge and origin. The Free-plan request quota remains account-wide; a malicious merge can still publish an integer.
-The all-zero KV namespace ID is a deliberate deployment blocker until replaced in a reviewed PR with the owner's ID.
+The owner's public KV namespace ID is configured in Wrangler; the config check permanently rejects all-zero IDs.
 
 ## Validation
 

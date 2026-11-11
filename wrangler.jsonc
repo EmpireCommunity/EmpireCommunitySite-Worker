@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "empirecommunity-members",
+  "name": "empirecommunitysite-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-10",
   "workers_dev": false,
@@ -9,9 +9,7 @@
   "kv_namespaces": [
     {
       "binding": "MEMBERS_KV",
-      // Replace in a reviewed PR after the owner creates the namespace.
-      // This placeholder deliberately prevents production deployment.
-      "id": "00000000000000000000000000000000"
+      "id": "e425151a6afc4050945ae37cec0604e0"
     }
   ],
   "vars": {

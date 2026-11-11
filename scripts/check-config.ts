@@ -16,14 +16,15 @@ function scanKeys(value: unknown): void {
 }
 requireRule(errors.length === 0 && config !== null && typeof config === 'object' && !Array.isArray(config), 'Invalid wrangler JSONC');
 scanKeys(config);
-requireRule(config.name === 'empirecommunity-members' && config.main === 'src/index.ts', 'Unexpected Worker identity/entrypoint');
+requireRule(config.name === 'empirecommunitysite-worker' && config.main === 'src/index.ts', 'Unexpected Worker identity/entrypoint');
 requireRule(typeof config.compatibility_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(config.compatibility_date), 'Pin compatibility_date');
 requireRule(config.workers_dev === false && config.preview_urls === false, 'Public alternate URLs must be disabled');
 requireRule(JSON.stringify(config.observability) === '{"enabled":false}', 'Disable all observability');
 requireRule(JSON.stringify(config.triggers) === '{"crons":["0 */12 * * *"]}', 'Only the twice-daily Cron is permitted');
 const namespaces = config.kv_namespaces as { binding?: unknown; id?: unknown }[] | undefined;
 requireRule(Array.isArray(namespaces) && namespaces.length === 1 && namespaces[0]?.binding === 'MEMBERS_KV'
-  && typeof namespaces[0]?.id === 'string' && /^[a-fA-F0-9]{32}$/.test(namespaces[0].id), 'Exactly one MEMBERS_KV namespace required');
+  && typeof namespaces[0]?.id === 'string' && /^[a-fA-F0-9]{32}$/.test(namespaces[0].id)
+  && namespaces[0].id !== '0'.repeat(32), 'Exactly one MEMBERS_KV namespace required');
 const vars = config.vars as Record<string, unknown> | undefined;
 requireRule(vars !== undefined && Object.keys(vars).sort().join(',') === 'DISCORD_GUILD_ID,DISCORD_INVITE_CODE,MEMBERS_SOURCE', 'Only the three public vars are allowed');
 requireRule(vars?.MEMBERS_SOURCE === 'discord-invite', 'Only discord-invite is implemented');

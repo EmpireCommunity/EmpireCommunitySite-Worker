@@ -21,7 +21,7 @@ async function readBody(response: Response, controller: AbortController): Promis
       size += value.byteLength;
       if (size > BODY_LIMIT) {
         controller.abort();
-        await reader.cancel();
+        await reader.cancel().catch(() => { /* Abort may already have errored the stream. */ });
         return null;
       }
       chunks.push(value);

@@ -85,6 +85,19 @@ describe('Discord external contract and retry rules', () => {
     expect(fetcher.mock.calls[0]![1]!.signal!.aborted).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it('does not retry an oversized response when abort errors its stream', async () => {
+    const { io, fetcher } = setup();
+    fetcher.mockImplementation(async (_url, init) => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(65_537));
+        init!.signal!.addEventListener('abort', () => controller.error(new Error('aborted')), { once: true });
+      },
+    })));
+    expect(await fetchMembers(config, io)).toEqual({ ok: false, code: 'invalid_response' });
+    expect(fetcher.mock.calls[0]![1]!.signal!.aborted).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(io.sleep).not.toHaveBeenCalled();
+  });
   it('accepts a valid JSON body at the cap', async () => {
     const body = JSON.stringify(valid).padEnd(65_536, ' ');
     const { io } = setup(new Response(body));
