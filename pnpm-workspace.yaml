@@ -1,0 +1,6 @@
+# pnpm 12: lifecycle scripts only for these two build tools.
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: true
+allowBuilds:
+  esbuild: true
+  workerd: true
