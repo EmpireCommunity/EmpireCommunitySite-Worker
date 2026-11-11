@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Select the reviewed Wrangler configuration explicitly for local builds and deployment.
+
 - Isolate the Worker entrypoint from internal handler exports and harden the configuration check.
 
 - Harden the configuration check, use manual upstream redirect handling and preserve HTTP outcomes on cleanup failure.
