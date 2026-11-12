@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Relicense the project code from MIT to GPL-3.0-only (GPL v3), using the unchanged official GNU license text (T-58, D-75).
+
 - Select the reviewed Wrangler configuration explicitly for local builds and deployment.
 
 - Isolate the Worker entrypoint from internal handler exports and harden the configuration check.
