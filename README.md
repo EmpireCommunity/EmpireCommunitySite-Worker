@@ -1,5 +1,7 @@
 # EmpireCommunitySite-Worker
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](LICENSE)
+
 Cloudflare Worker publishing the EmpireCommunity member count at
 `https://empirecommunity.org/data/members.json` for the
 [site](https://github.com/EmpireCommunity/EmpireCommunitySite).
@@ -56,4 +58,4 @@ See the site contract and Ops Runbook for the full acceptance procedure.
 
 ## License
 
-Code is under the [MIT License](LICENSE). The EmpireCommunity name and logo are not covered: all rights reserved.
+Code is under the [GPL v3](LICENSE) (GPL-3.0-only). The EmpireCommunity name and logo are not covered: all rights reserved.
