@@ -36,6 +36,8 @@ const MAX_AHEAD_MS = 5 * 60 * 1000;
 /** Freshness of the relay's `fetchedAt` against the injected run time (contract 2.5, B-WK1). */
 export function checkFreshness(json: unknown, now: number): 'fresh' | 'stale' | 'malformed' {
   if (!object(json) || !isoInstant(json.fetchedAt)) return 'malformed';
+  // B-WK1b: a pure rule on a trust boundary fails closed; with a non-finite clock every comparison would be false.
+  if (!Number.isFinite(now)) return 'stale';
   const age = now - Date.parse(json.fetchedAt);
   return age > MAX_AGE_MS || -age > MAX_AHEAD_MS ? 'stale' : 'fresh';
 }
