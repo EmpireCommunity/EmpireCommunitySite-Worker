@@ -25,10 +25,13 @@ pnpm build
 ```
 
 `build` bundles a local dry run only. Tests use mocked upstream/KV/cache, injected time and fake timers.
-`src/rules.ts` owns parsing and decisions, `src/upstream.ts` owns the bounded invite request and retries, and
-`src/handlers.ts` implements the read and scheduled handlers; `src/index.ts` exports their Worker entrypoint.
-Only Cron writes KV; visitor requests never call Discord.
-Cron failures preserve the last good value. Requests pass to the origin file when no valid value exists or a cache/KV
+`src/rules.ts` owns parsing, freshness, decisions and the run status, `src/upstream.ts` owns the bounded request to
+the relay and its retries, and `src/handlers.ts` implements the read and scheduled handlers; `src/index.ts` exports
+their Worker entrypoint. The Cron reads the member count from the site's relay
+(`https://empirecommunity.org/data/members-source.json`, a constant; B-WK1, ADR-0005 of the site), never from
+`discord.com`: the relay calls Discord from the VPS. Only Cron writes KV; visitor requests never call the relay.
+Cron failures preserve the last good value. Every Cron run also writes `members:status:v1` (time, outcome, error code
+and HTTP status of the last attempt), which is the only diagnosis without logs; the request handler never reads it. Requests pass to the origin file when no valid value exists or a cache/KV
 operation fails, including `cache.put` even when KV has a valid record. No request logs are emitted.
 
 ## Configuration and deployment (D-55)

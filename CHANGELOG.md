@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Read the member count from the site's relay on the VPS instead of `discord.com` (B-WK1, D-82, site ADR-0005): the
+  upstream is the constant `https://empirecommunity.org/data/members-source.json`; a pure `checkFreshness` with the
+  run time injected rejects a malformed `fetchedAt` (`invalid_response`) and one older than 24 hours or more than
+  5 minutes ahead (`upstream_unavailable`, same retries); a `404` from the relay is `upstream_unavailable` with the same
+  retries (X1), so `invite_not_found` is no longer produced (an older record still parses). Every Cron run writes
+  `members:status:v1` (`at`, `outcome`, `lastError` or `store_failed`, `httpStatus` of the last attempt) after the
+  record write; a failed KV read still writes neither key, and the request handler never reads it. `wrangler.jsonc`
+  is unchanged.
+
 - Relicense the project code from MIT to GPL-3.0-only (GPL v3), using the unchanged official GNU license text (T-58, D-75).
 
 - Select the reviewed Wrangler configuration explicitly for local builds and deployment.

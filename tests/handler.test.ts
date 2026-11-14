@@ -3,7 +3,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import * as entrypoint from '../src/index.ts';
 import worker from '../src/index.ts';
-import { handleRequest, runScheduled, PUBLIC_URL, KV_KEY, type Env, type IO } from '../src/handlers.ts';
+import { handleRequest, runScheduled, PUBLIC_URL, KV_KEY, STATUS_KEY, type Env, type IO } from '../src/handlers.ts';
 
 it('exports only the default Worker handler from the entrypoint', () => {
   expect(Object.keys(entrypoint)).toEqual(['default']);
@@ -117,39 +117,102 @@ describe('HTTP contract', () => {
   });
 });
 
-describe('Cron persistence contract', () => {
-  it('writes only validated named fields with injected time', async () => {
+describe('Run status key is never part of the request path (contract 2.2, 7)', () => {
+  it.each([
+    ['absent', null],
+    ['a written status', { at: now, outcome: 'written', lastError: null, httpStatus: 200 }],
+    ['a hostile value', { at: '<script>', outcome: 'kept', lastError: 'store_failed', httpStatus: 599, members: 1 }],
+  ])('with the status key %s, the public answer is the same and the key is neither read nor written', async (_name, status) => {
     const { env, io, store } = setup();
-    vi.mocked(io.fetch).mockResolvedValue(Response.json({ code: env.DISCORD_INVITE_CODE, guild: { id: env.DISCORD_GUILD_ID }, approximate_member_count: 900, private: 'discard' }));
-    await runScheduled(env, io);
-    expect(store.put).toHaveBeenCalledExactlyOnceWith(KV_KEY, JSON.stringify({ ...record, members: 900 }));
-  });
-  it('persists failure counters while keeping the last successful value and date', async () => {
-    const { env, io, store } = setup();
-    vi.mocked(io.fetch).mockResolvedValue(new Response(null, { status: 404 }));
-    await runScheduled(env, io);
-    expect(store.put).toHaveBeenCalledExactlyOnceWith(KV_KEY, JSON.stringify({ ...record, consecutiveFailures: 1, lastError: 'invite_not_found' }));
-  });
-  it('first failure leaves the key absent', async () => {
-    const { env, io, store } = setup(null);
-    vi.mocked(io.fetch).mockResolvedValue(new Response(null, { status: 404 }));
-    await runScheduled(env, io);
+    store.get.mockImplementation(async (key) => (key === STATUS_KEY ? status : record));
+    const response = await handleRequest(new Request(PUBLIC_URL), env, io);
+    expect(await response.json()).toEqual(publicBody);
+    expect(store.get.mock.calls.map(([key]) => key)).toEqual([KV_KEY]);
     expect(store.put).not.toHaveBeenCalled();
   });
-  it('does not overwrite unreadable KV, and contains KV write failures without logs', async () => {
+});
+
+describe('Cron persistence contract', () => {
+  const relayBody = (members = 900) => ({
+    code: 'approved-invite', guild: { id: '1010657521775681556' }, approximate_member_count: members,
+    fetchedAt: '2026-11-10T11:59:00.000Z', private: 'discard',
+  });
+  const status = (outcome: string, lastError: string | null, httpStatus: number | null) => ({ at: now, outcome, lastError, httpStatus });
+  const written = (store: ReturnType<typeof setup>['store']) => store.put.mock.calls.map(([key, value]) => [key, JSON.parse(value)]);
+  it('writes only validated named fields with injected time, then the run status', async () => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockResolvedValue(Response.json(relayBody()));
+    await runScheduled(env, io);
+    expect(store.put.mock.calls[0]).toEqual([KV_KEY, JSON.stringify({ ...record, members: 900 })]);
+    expect(written(store)).toEqual([[KV_KEY, { ...record, members: 900 }], [STATUS_KEY, status('written', null, 200)]]);
+  });
+  it('a 404 from the relay keeps the last value as upstream_unavailable after the retries (X1)', async () => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockImplementation(async () => new Response(null, { status: 404 }));
+    await runScheduled(env, io);
+    expect(io.fetch).toHaveBeenCalledTimes(3);
+    expect(written(store)).toEqual([
+      [KV_KEY, { ...record, consecutiveFailures: 1, lastError: 'upstream_unavailable' }],
+      [STATUS_KEY, status('kept', 'upstream_unavailable', 404)],
+    ]);
+  });
+  it('a first failure leaves the record absent and still writes the run status', async () => {
+    const { env, io, store } = setup(null);
+    vi.mocked(io.fetch).mockImplementation(async () => new Response(null, { status: 404 }));
+    await runScheduled(env, io);
+    expect(written(store)).toEqual([[STATUS_KEY, status('kept', 'upstream_unavailable', 404)]]);
+  });
+  it('a first failure with no HTTP response records a null status', async () => {
+    const { env, io, store } = setup(null);
+    vi.mocked(io.fetch).mockRejectedValue(new Error('offline'));
+    await runScheduled(env, io);
+    expect(written(store)).toEqual([[STATUS_KEY, status('kept', 'upstream_unavailable', null)]]);
+  });
+  it('an edge refusal (403 page) is invalid_response with one attempt', async () => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockResolvedValue(new Response('<html>challenge</html>', { status: 403 }));
+    await runScheduled(env, io);
+    expect(io.fetch).toHaveBeenCalledTimes(1);
+    expect(written(store)[1]).toEqual([STATUS_KEY, status('kept', 'invalid_response', 403)]);
+  });
+  it('a jump kept out of band says out_of_band in the status', async () => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockResolvedValue(Response.json(relayBody(2000)));
+    await runScheduled(env, io);
+    expect(written(store)[1]).toEqual([STATUS_KEY, status('kept', 'out_of_band', 200)]);
+  });
+  it.each([
+    ['a new value', () => Response.json(relayBody())],
+    ['a failure', () => new Response(null, { status: 403 })],
+  ])('when the record write of %s throws, the status says kept with store_failed, never written', async (_name, answer) => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockImplementation(async () => answer());
+    store.put.mockImplementation(async (key) => { if (key === KV_KEY) throw new Error('KV unavailable'); });
+    await expect(runScheduled(env, io)).resolves.toBeUndefined();
+    expect(store.put.mock.calls.map(([key]) => key)).toEqual([KV_KEY, STATUS_KEY]);
+    expect(JSON.parse(store.put.mock.calls[1]![1])).toEqual(status('kept', 'store_failed', answer().status));
+  });
+  it('a failed status write changes nothing else', async () => {
+    const { env, io, store } = setup();
+    vi.mocked(io.fetch).mockResolvedValue(Response.json(relayBody()));
+    store.put.mockImplementation(async (key) => { if (key === STATUS_KEY) throw new Error('KV unavailable'); });
+    await expect(runScheduled(env, io)).resolves.toBeUndefined();
+    expect(store.put.mock.calls[0]).toEqual([KV_KEY, JSON.stringify({ ...record, members: 900 })]);
+  });
+  it('an unreadable record writes neither key and makes no request', async () => {
     const { env, io, store } = setup();
     store.get.mockRejectedValueOnce(new Error('KV unavailable'));
     await runScheduled(env, io);
     expect(io.fetch).not.toHaveBeenCalled();
     expect(store.put).not.toHaveBeenCalled();
-    store.put.mockRejectedValue(new Error('KV unavailable'));
-    vi.mocked(io.fetch).mockResolvedValue(new Response(null, { status: 404 }));
-    await expect(runScheduled(env, io)).resolves.toBeUndefined();
   });
   it('unknown source fails closed without an upstream call', async () => {
     const { env, io, store } = setup();
     await runScheduled({ ...env, MEMBERS_SOURCE: 'empirebot' }, io);
     expect(io.fetch).not.toHaveBeenCalled();
-    expect(JSON.parse(store.put.mock.calls[0]![1] as string).lastError).toBe('invalid_response');
+    expect(written(store)).toEqual([
+      [KV_KEY, { ...record, consecutiveFailures: 1, lastError: 'invalid_response' }],
+      [STATUS_KEY, status('kept', 'invalid_response', null)],
+    ]);
   });
 });
