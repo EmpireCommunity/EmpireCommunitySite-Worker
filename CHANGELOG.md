@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Backlog B-WK1b and B-WK1c: `checkFreshness` answers `stale` for a run time that is not finite; tests cover the Cron
+  entrypoint through the real wiring and the 100 and 599 status edges; coverage runs with every test run and has a floor.
+
 - Read the member count from the site's relay on the VPS instead of `discord.com` (B-WK1, D-82, site ADR-0005): the
   upstream is the constant `https://empirecommunity.org/data/members-source.json`; a pure `checkFreshness` with the
   run time injected rejects a malformed `fetchedAt` (`invalid_response`) and one older than 24 hours or more than

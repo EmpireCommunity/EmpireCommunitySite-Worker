@@ -216,3 +216,24 @@ describe('Cron persistence contract', () => {
     ]);
   });
 });
+
+it('B-WK1c: the Cron entrypoint runs the real wiring: only the relay is requested, then members:v1 and members:status:v1', async () => {
+  const fetchedAt = new Date().toISOString(); // the real runtime clock is in play here
+  const requests: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    requests.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    return Response.json({ code: 'approved-invite', guild: { id: '1010657521775681556' }, approximate_member_count: 900, fetchedAt });
+  }));
+  const writes: [string, unknown][] = [];
+  const env: Env = {
+    MEMBERS_KV: { get: async () => record, put: async (key, value) => { writes.push([key, JSON.parse(value)]); } },
+    MEMBERS_SOURCE: 'discord-invite', DISCORD_INVITE_CODE: 'approved-invite', DISCORD_GUILD_ID: '1010657521775681556',
+  };
+  try {
+    await worker.scheduled({} as ScheduledController, env);
+    expect(requests).toEqual(['https://empirecommunity.org/data/members-source.json']);
+    expect(writes.map(([key]) => key)).toEqual([KV_KEY, STATUS_KEY]);
+    expect(writes[0]![1]).toMatchObject({ members: 900, source: 'discord-invite', lastError: null });
+    expect(writes[1]![1]).toMatchObject({ outcome: 'written', lastError: null, httpStatus: 200 });
+  } finally { vi.unstubAllGlobals(); }
+});

@@ -89,6 +89,9 @@ describe('checkFreshness: the relay time (contract 2.5, B-WK1)', () => {
   ] as const)('%s is %s', (_name, fetchedAt, expected) => {
     expect(checkFreshness({ fetchedAt }, runAt)).toBe(expected);
   });
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])('a run time that is not finite (%s) fails closed as stale (B-WK1b)', (bad) => {
+    expect(checkFreshness({ fetchedAt: now }, bad)).toBe('stale');
+  });
   it.each([null, [], 'text'])('a body that is not an object (%j) is malformed', (body) => {
     expect(checkFreshness(body, runAt)).toBe('malformed');
   });
@@ -106,6 +109,8 @@ describe('runStatus: closed values only (contract 2.2, B-WK1)', () => {
     ['a failure whose record write threw', down, 'keep', 503, true, { outcome: 'kept', lastError: 'store_failed', httpStatus: 503 }],
     ['a status below 100', down, 'keep', 99, false, { outcome: 'kept', lastError: 'upstream_unavailable', httpStatus: null }],
     ['a status above 599', down, 'keep', 600, false, { outcome: 'kept', lastError: 'upstream_unavailable', httpStatus: null }],
+    ['the lowest status kept, 100 (B-WK1c)', down, 'keep', 100, false, { outcome: 'kept', lastError: 'upstream_unavailable', httpStatus: 100 }],
+    ['the highest status kept, 599 (B-WK1c)', down, 'keep', 599, false, { outcome: 'kept', lastError: 'upstream_unavailable', httpStatus: 599 }],
   ] as const)('%s', (_name, candidate, action, httpStatus, storeFailed, expected) => {
     expect(runStatus(now, candidate, action, httpStatus, storeFailed)).toEqual({ at: now, ...expected });
   });
