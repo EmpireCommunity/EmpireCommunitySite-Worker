@@ -1,8 +1,10 @@
-import { decide, parseRecord } from './rules.ts';
-import { fetchMembers, type UpstreamIO } from './upstream.ts';
+import { decide, parseRecord, runStatus, type MemberRecord } from './rules.ts';
+import { fetchMembers, type Fetched, type UpstreamIO } from './upstream.ts';
 
 export const PUBLIC_URL = 'https://empirecommunity.org/data/members.json';
 export const KV_KEY = 'members:v1';
+/** Written by the Cron only, never read by the HTTP handler and never public (contract 2.2, B-WK1). */
+export const STATUS_KEY = 'members:status:v1';
 export interface Env {
   MEMBERS_KV: {
     get(key: string, type: 'json'): Promise<unknown>;
@@ -57,14 +59,24 @@ export async function handleRequest(request: Request, env: Env, io: IO = runtime
 }
 
 export async function runScheduled(env: Env, io: IO = runtime): Promise<void> {
+  let last: MemberRecord | null;
   try {
-    const last = parseRecord(await env.MEMBERS_KV.get(KV_KEY, 'json'));
-    const candidate = env.MEMBERS_SOURCE === 'discord-invite'
-      ? await fetchMembers({ inviteCode: env.DISCORD_INVITE_CODE, guildId: env.DISCORD_GUILD_ID }, io)
-      : { ok: false as const, code: 'invalid_response' as const };
-    const { record } = decide(last, candidate, io.now());
-    if (record !== null) await env.MEMBERS_KV.put(KV_KEY, JSON.stringify(record));
+    last = parseRecord(await env.MEMBERS_KV.get(KV_KEY, 'json'));
   } catch {
-    // A failed KV read must not overwrite the last good value; no logs (D-20).
+    return; // A failed KV read writes neither key: the last good value stays; no logs (D-20).
+  }
+  const at = io.now();
+  const { candidate, httpStatus }: Fetched = env.MEMBERS_SOURCE === 'discord-invite'
+    ? await fetchMembers({ inviteCode: env.DISCORD_INVITE_CODE, guildId: env.DISCORD_GUILD_ID }, io, Date.parse(at))
+    : { candidate: { ok: false, code: 'invalid_response' }, httpStatus: null };
+  const { action, record } = decide(last, candidate, at);
+  let storeFailed = false;
+  if (record !== null) {
+    try { await env.MEMBERS_KV.put(KV_KEY, JSON.stringify(record)); } catch { storeFailed = true; }
+  }
+  try {
+    await env.MEMBERS_KV.put(STATUS_KEY, JSON.stringify(runStatus(at, candidate, action, httpStatus, storeFailed)));
+  } catch {
+    // A failed status write changes nothing else (contract 2.2).
   }
 }
