@@ -31,7 +31,10 @@ their Worker entrypoint. The Cron reads the member count from the site's relay
 (`https://empirecommunity.org/data/members-source.json`, a constant; B-WK1, ADR-0005 of the site), never from
 `discord.com`: the relay calls Discord from the VPS. Only Cron writes KV; visitor requests never call the relay.
 Cron failures preserve the last good value. Every Cron run also writes `members:status:v1` (time, outcome, error code
-and HTTP status of the last attempt), which is the only diagnosis without logs; the request handler never reads it. Requests pass to the origin file when no valid value exists or a cache/KV
+and HTTP status of the last attempt), which is the only diagnosis without logs; the request handler never reads it.
+The status is written after the `members:v1` write was attempted. Two cases leave an older status in place: a failed
+`members:v1` read stops the run before either key is written, and the status write itself can fail. Compare its `at`
+with the last expected Cron time (00:00 or 12:00 UTC) before trusting it as the latest run. Requests pass to the origin file when no valid value exists or a cache/KV
 operation fails, including `cache.put` even when KV has a valid record. No request logs are emitted.
 
 ## Configuration and deployment (D-55)
